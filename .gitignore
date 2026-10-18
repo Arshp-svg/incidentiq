@@ -1,4 +1,25 @@
-﻿.venv/
+# Python
+.venv/
 __pycache__/
 *.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Environment and secrets
 .env
+*.env.local
+
+# Testing & caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend
+apps/web/node_modules/
+apps/web/dist/
+
+# OS specific
+.DS_Store
+Thumbs.db

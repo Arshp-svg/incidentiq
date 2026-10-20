@@ -1,0 +1,1 @@
+"""Investigation worker service package."""

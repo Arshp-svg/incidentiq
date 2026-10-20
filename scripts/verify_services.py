@@ -1,4 +1,4 @@
-﻿"""Verification script to test connectivity to PostgreSQL, Kafka, Neo4j, and MinIO."""
+"""Verification script to test connectivity to PostgreSQL, Kafka, Neo4j, and MinIO."""
 
 import os
 import sys
@@ -9,9 +9,11 @@ from kafka import KafkaProducer
 
 def check_postgres():
     db_url = os.getenv("DATABASE_URL", "postgresql://incidentiq:incidentiq_password@localhost:5432/incidentiq")
+    # Normalize SQLAlchemy driver prefix (postgresql+psycopg:// -> postgresql://) for raw psycopg
+    raw_conn_url = db_url.replace("postgresql+psycopg://", "postgresql://")
     print("[1/4] Checking PostgreSQL & pgvector...", end=" ")
     try:
-        with psycopg.connect(db_url) as conn:
+        with psycopg.connect(raw_conn_url) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1;")
                 cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")

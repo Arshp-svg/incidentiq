@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U incidentiq -d incidentiq"]
+      test: [ "CMD-SHELL", "pg_isready -U incidentiq -d incidentiq" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -51,16 +51,16 @@ services:
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1" ]
       interval: 5s
       timeout: 5s
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio:latest
     container_name: incidentiq-minio
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: [ "server", "/data", "--console-address", ":9001" ]
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -69,24 +69,37 @@ services:
       MINIO_ROOT_PASSWORD: minioadminpassword
     volumes:
       - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
-  minio-init:
-    image: minio/mc:latest
-    container_name: incidentiq-minio-init
+  minio-wait:
+    image: busybox:1.36
     depends_on:
       minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadminpassword;
-      /usr/bin/mc mb myminio/incidentiq-artifacts --ignore-existing;
-      exit 0;
-      "
+        condition: service_started
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        for i in $(seq 1 30); do
+          if wget -q -O /dev/null http://minio:9000/minio/health/ready; then
+            echo "MinIO is ready"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "MinIO did not become ready within 60 seconds" >&2
+        exit 1
+    restart: "no"
+
+  minio-init:
+    image: cgr.dev/chainguard/minio-client:latest
+    container_name: incidentiq-minio-init
+    depends_on:
+      minio-wait:
+        condition: service_completed_successfully
+    environment:
+      MC_HOST_myminio: http://minioadmin:minioadminpassword@minio:9000
+    entrypoint: [ "/usr/bin/mc" ]
+    command: [ "mb", "--ignore-existing", "myminio/incidentiq-artifacts" ]
+    restart: "no"
 
 volumes:
   postgres_data:

@@ -27,7 +27,7 @@ jobs:
           --health-retries 5
 
       minio:
-        image: minio/minio:RELEASE.2024-01-31T20-20-33Z
+        image: minio/minio:latest
         ports:
           - 9000:9000
         env:

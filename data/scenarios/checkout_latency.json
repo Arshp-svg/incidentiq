@@ -1,0 +1,71 @@
+{
+  "scenario_id": "scenario-checkout-latency",
+  "title": "Checkout service timeouts due to downstream database degradation",
+  "service_name": "checkout",
+  "severity": "high",
+  "events": [
+    {
+      "event_id": "evt-001",
+      "timestamp": "2026-10-18T10:00:00Z",
+      "service": "checkout",
+      "event_type": "error",
+      "severity": "high",
+      "message": "Database request timed out",
+      "attributes": {
+        "database": "orders-db",
+        "duration_ms": 3200,
+        "deployment_version": "v1.4.2"
+      }
+    },
+    {
+      "event_id": "evt-002",
+      "timestamp": "2026-10-18T10:00:30Z",
+      "service": "orders",
+      "event_type": "warn",
+      "severity": "medium",
+      "message": "Database connection pool near capacity",
+      "attributes": {
+        "database": "orders-db",
+        "active_connections": 98,
+        "max_connections": 100
+      }
+    },
+    {
+      "event_id": "evt-003",
+      "timestamp": "2026-10-18T10:01:00Z",
+      "service": "orders-db",
+      "event_type": "error",
+      "severity": "high",
+      "message": "Slow query detected on table orders",
+      "attributes": {
+        "database": "orders-db",
+        "duration_ms": 4250,
+        "query": "SELECT * FROM orders WHERE status = 'pending'"
+      }
+    },
+    {
+      "event_id": "evt-004",
+      "timestamp": "2026-10-18T10:01:30Z",
+      "service": "checkout",
+      "event_type": "warn",
+      "severity": "medium",
+      "message": "Circuit breaker OPEN for orders service",
+      "attributes": {
+        "circuit_breaker": "orders_client",
+        "consecutive_failures": 15
+      }
+    },
+    {
+      "event_id": "evt-005",
+      "timestamp": "2026-10-18T10:02:00Z",
+      "service": "api-gateway",
+      "event_type": "error",
+      "severity": "high",
+      "message": "HTTP 504 Gateway Timeout on /api/v1/checkout",
+      "attributes": {
+        "upstream_service": "checkout",
+        "duration_ms": 5000
+      }
+    }
+  ]
+}

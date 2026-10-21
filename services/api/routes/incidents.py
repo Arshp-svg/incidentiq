@@ -169,6 +169,9 @@ def record_feedback(
     if not inc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident {id} not found")
 
+    inc.status = "resolved"
+    db.commit()
+
     feedback = incident_repository.create_feedback(
         db=db,
         incident_id=id,

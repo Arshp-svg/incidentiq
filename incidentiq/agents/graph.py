@@ -170,6 +170,11 @@ def persist_result(state: InvestigationState) -> dict[str, Any]:
                 # Cache the complete report in job.checkpoint_id (avoids extra finding row and preserves findings_count == 1)
                 job.checkpoint_id = json.dumps(report)
                 job.status = "completed"
+
+                inc = db.query(Incident).filter(Incident.id == incident_id).first()
+                if inc:
+                    inc.status = "resolved"
+
                 db.commit()
             else:
                 logger.info(f"Job {job_id} not in investigation_jobs table; skipped DB finding persist.")

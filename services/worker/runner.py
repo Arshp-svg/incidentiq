@@ -83,7 +83,12 @@ def run_investigation_job(
                     job.status = "completed"
                     job.finished_at = datetime.now(timezone.utc)
                     job.error_message = None
-                    db.commit()
+
+                inc = db.query(Incident).filter(Incident.id == incident_id).first()
+                if inc:
+                    inc.status = "resolved"
+
+                db.commit()
 
             logger.info(f"Investigation completed successfully for incident {incident_id}")
             return final_state.get("report", {})

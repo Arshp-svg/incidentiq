@@ -33,8 +33,9 @@ def test_incident_creation_validation_error():
     assert res.status_code == 422
 
 
+@patch("services.api.routes.incidents.run_investigation_job")
 @patch("incidentiq.db.repositories.s3_service.upload_raw_events", return_value="incidents/test/raw/events.jsonl")
-def test_idempotency_key_replay_and_conflict(mock_s3_upload):
+def test_idempotency_key_replay_and_conflict(mock_s3_upload, mock_run_job):
     """Verify Idempotency-Key caching returns identical incident on exact replay and 409 on conflict."""
     key = f"idem-unit-{uuid.uuid4()}"
     payload_a = {

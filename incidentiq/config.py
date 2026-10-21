@@ -30,5 +30,12 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str = "incidentiq-artifacts"
     S3_REGION: str = "us-east-1"
 
+    # API & CORS
+    CORS_ALLOWED_ORIGINS: str = "*"
+
+    # Optional LLM settings
+    OPENAI_API_KEY: str | None = None
+    LLM_MODEL: str = "gpt-4o-mini"
+
 
 settings = Settings()

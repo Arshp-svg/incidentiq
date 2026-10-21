@@ -80,11 +80,10 @@ jobs:
       - name: Seed Runbooks for Retrieval
         run: |
           python -c "
-          from incidentiq.db.session import SessionLocal
           from incidentiq.retrieval.indexer import index_all_runbooks
-          with SessionLocal() as db:
-              indexed = index_all_runbooks(db)
-              print(f'Successfully indexed {indexed} runbook chunks.')
+          indexed = index_all_runbooks()
+          total = sum(indexed.values())
+          print(f'Successfully indexed {total} runbook chunks across {len(indexed)} runbooks.')
           "
 
       - name: Run Integration Tests

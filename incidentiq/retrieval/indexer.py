@@ -97,15 +97,33 @@ def index_runbook_file(db: Session, file_path: Path) -> int:
     return len(chunks)
 
 
-def index_all_runbooks(runbooks_dir: Path | None = None) -> dict[str, int]:
+def index_all_runbooks(
+    db_or_dir: Any = None,
+    runbooks_dir: Path | None = None,
+) -> dict[str, int]:
     """Index all markdown files from the runbooks directory."""
-    if runbooks_dir is None:
-        runbooks_dir = Path(__file__).resolve().parents[2] / "data" / "runbooks"
+    db_session: Session | None = None
+    target_dir: Path | None = None
+
+    if isinstance(db_or_dir, (str, Path)):
+        target_dir = Path(db_or_dir)
+    elif db_or_dir is not None:
+        db_session = db_or_dir
+
+    if runbooks_dir is not None:
+        target_dir = runbooks_dir
+    elif target_dir is None:
+        target_dir = Path(__file__).resolve().parents[2] / "data" / "runbooks"
 
     results = {}
-    with SessionLocal() as db:
-        for md_file in runbooks_dir.glob("*.md"):
-            indexed_count = index_runbook_file(db, md_file)
+    if db_session is not None:
+        for md_file in target_dir.glob("*.md"):
+            indexed_count = index_runbook_file(db_session, md_file)
             results[md_file.name] = indexed_count
+    else:
+        with SessionLocal() as db:
+            for md_file in target_dir.glob("*.md"):
+                indexed_count = index_runbook_file(db, md_file)
+                results[md_file.name] = indexed_count
 
     return results

@@ -143,19 +143,28 @@ def persist_result(state: InvestigationState) -> dict[str, Any]:
         except Exception as e:
             logger.error(f"Failed to upload report to S3: {e}")
 
-        # 2. Persist findings into PostgreSQL
+        # 2. Persist findings into PostgreSQL (Idempotent upsert)
         with SessionLocal() as db:
             job = db.query(InvestigationJob).filter(InvestigationJob.id == job_id).first()
             if job:
                 root_cause = report.get("root_cause", {})
-                finding = InvestigationFinding(
-                    job_id=job_id,
-                    finding_type="root_cause",
-                    claim=root_cause.get("claim", "Unknown"),
-                    confidence=root_cause.get("confidence", 0.0),
-                    evidence=root_cause.get("evidence_ids", []),
-                )
-                db.add(finding)
+                existing_finding = db.query(InvestigationFinding).filter(
+                    InvestigationFinding.job_id == job_id,
+                    InvestigationFinding.finding_type == "root_cause",
+                ).first()
+                if existing_finding:
+                    existing_finding.claim = root_cause.get("claim", "Unknown")
+                    existing_finding.confidence = root_cause.get("confidence", 0.0)
+                    existing_finding.evidence = root_cause.get("evidence_ids", [])
+                else:
+                    finding = InvestigationFinding(
+                        job_id=job_id,
+                        finding_type="root_cause",
+                        claim=root_cause.get("claim", "Unknown"),
+                        confidence=root_cause.get("confidence", 0.0),
+                        evidence=root_cause.get("evidence_ids", []),
+                    )
+                    db.add(finding)
                 job.status = "completed"
                 db.commit()
             else:

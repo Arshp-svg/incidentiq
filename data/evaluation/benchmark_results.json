@@ -1,0 +1,46 @@
+{
+  "total_incidents": 40,
+  "metrics": {
+    "root_cause_accuracy": 1.0,
+    "evidence_validity_rate": 1.0,
+    "evidence_relevance_rate": 1.0,
+    "abstention_quality_rate": 1.0,
+    "retrieval_recall_at_k": 0.96875,
+    "p50_latency_ms": 80.289300000004,
+    "p95_latency_ms": 88.1664999997156,
+    "total_estimated_cost_usd": 0.009396,
+    "cost_per_investigation_usd": 0.0002349
+  },
+  "scenario_breakdown": {
+    "A": {
+      "count": 8,
+      "accuracy": 1.0,
+      "validity": 1.0,
+      "avg_latency_ms": 162.80653750004603
+    },
+    "B": {
+      "count": 8,
+      "accuracy": 1.0,
+      "validity": 1.0,
+      "avg_latency_ms": 83.95113749998018
+    },
+    "C": {
+      "count": 8,
+      "accuracy": 1.0,
+      "validity": 1.0,
+      "avg_latency_ms": 79.42991249979059
+    },
+    "D": {
+      "count": 8,
+      "accuracy": 1.0,
+      "validity": 1.0,
+      "avg_latency_ms": 79.25852500011388
+    },
+    "E": {
+      "count": 8,
+      "accuracy": 1.0,
+      "validity": 1.0,
+      "avg_latency_ms": 74.41820000008192
+    }
+  }
+}

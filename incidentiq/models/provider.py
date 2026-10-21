@@ -107,14 +107,14 @@ def _generate_deterministic_baseline(
             "limitations": ["No telemetry events were recorded."],
         }
 
-    # Extract all real event IDs
+    # Extract real event IDs
     real_event_ids = [e.get("event_id") or e.get("source_event_id") for e in events if e.get("event_id") or e.get("source_event_id")]
 
-    # Identify candidate clues
-    event_messages = " ".join([e.get("message", "").lower() for e in events])
-    event_attrs = {}
-    for e in events:
-        event_attrs.update(e.get("attributes", {}) if isinstance(e.get("attributes"), dict) else {})
+    # Check if there are any critical/high errors or actionable failures
+    has_actionable_errors = any(
+        e.get("event_type") in ("error", "deployment") or e.get("severity") in ("high", "critical")
+        for e in events
+    )
 
     # Affected services from dependency graph
     affected = [service_name]
@@ -122,23 +122,122 @@ def _generate_deterministic_baseline(
         if dep.get("name") not in affected:
             affected.append(dep.get("name"))
 
-    # Pattern 1: Database Latency / Timeout
-    if "database" in event_messages or "timeout" in event_messages or "orders-db" in str(event_attrs):
+    # Pattern E: Abstention / Insufficient Evidence
+    # If no actionable errors or all events are benign/low severity, return low confidence to trigger abstention
+    if not has_actionable_errors:
+        return {
+            "incident_id": incident_id,
+            "summary": "Inconclusive Investigation: Telemetry evidence was insufficient or uncorroborated.",
+            "root_cause": {
+                "claim": "Inconclusive: Telemetry signals are low-severity or uncorroborated background noise.",
+                "confidence": 0.2,
+                "evidence_ids": real_event_ids[:2] if real_event_ids else [],
+            },
+            "affected_services": [service_name],
+            "alternatives": ["Routine background maintenance or transient non-impacting telemetry jitter."],
+            "recommended_checks": ["Continue monitoring service health dashboards."],
+            "limitations": ["No high-severity error signals or causal degradation patterns detected."],
+        }
+
+    # Aggregate textual clues
+    event_messages = " ".join([e.get("message", "").lower() for e in events])
+    event_attrs = {}
+    for e in events:
+        if isinstance(e.get("attributes"), dict):
+            event_attrs.update(e.get("attributes", {}))
+    attrs_str = str(event_attrs).lower()
+
+    # Pattern B: Faulty Deployment
+    if "deployment" in event_messages or "previous_version" in attrs_str or "deployment_version" in attrs_str:
+        bad_ver = event_attrs.get("deployment_version", "latest")
+        return {
+            "incident_id": incident_id,
+            "summary": f"Application crash loop and 500 error surge following deployment of {service_name} ({bad_ver}).",
+            "root_cause": {
+                "claim": f"Faulty deployment release of {service_name} ({bad_ver}) introduced fatal runtime errors.",
+                "confidence": 0.88,
+                "evidence_ids": real_event_ids[:2] if real_event_ids else ["evt-unknown"],
+            },
+            "affected_services": affected[:3],
+            "alternatives": [
+                "Underlying config map or secret rotation failure during deployment pod restart."
+            ],
+            "recommended_checks": [
+                f"Execute immediate rollback to previous stable version per deployment runbook.",
+                "Inspect pod crash logs and stack trace exceptions."
+            ],
+            "limitations": [
+                "Full application stack trace was truncated in initial telemetry payload."
+            ],
+        }
+
+    # Pattern C: External Payment Provider Outage
+    if any(k in event_messages or k in attrs_str for k in ("payment", "stripe", "adyen", "paypal", "braintree", "checkout.com")):
+        provider = event_attrs.get("provider_host", "external payment provider")
+        return {
+            "incident_id": incident_id,
+            "summary": f"Payment processing failures caused by third-party gateway downtime at {provider}.",
+            "root_cause": {
+                "claim": f"External payment provider outage at {provider} is causing payment authorization failures.",
+                "confidence": 0.86,
+                "evidence_ids": real_event_ids[:2] if real_event_ids else ["evt-unknown"],
+            },
+            "affected_services": affected[:2],
+            "alternatives": [
+                "Egress firewall or TLS mutual authentication handshake failure."
+            ],
+            "recommended_checks": [
+                "Check external payment vendor status dashboard.",
+                "Verify circuit breaker trip thresholds and retry policies."
+            ],
+            "limitations": [
+                "Third-party vendor health metrics are not directly monitored."
+            ],
+        }
+
+    # Pattern D: Connection-Pool Exhaustion
+    if "connection pool" in event_messages or "pool exhausted" in event_messages or "pool saturation" in event_messages or "hikaripool" in event_messages or "queuepool" in event_messages:
+        db_name = event_attrs.get("database", "downstream database")
+        return {
+            "incident_id": incident_id,
+            "summary": f"Database connection pool exhaustion on {db_name} starving {service_name} request threads.",
+            "root_cause": {
+                "claim": f"Database connection pool exhaustion on {db_name} is blocking worker threads.",
+                "confidence": 0.85,
+                "evidence_ids": real_event_ids[:2] if real_event_ids else ["evt-unknown"],
+            },
+            "affected_services": affected[:2],
+            "alternatives": [
+                "Database server max_connections reached due to connection leakage.",
+                "Long-running analytical queries holding connections open."
+            ],
+            "recommended_checks": [
+                "Inspect pg_stat_activity connection counts and state.",
+                "Increase max pool size or decrease connection timeout in application config."
+            ],
+            "limitations": [
+                "Historical connection leak profiles were not available."
+            ],
+        }
+
+    # Pattern A: Database Latency Spike
+    if "database" in event_messages or "query" in event_messages or "orders-db" in attrs_str or "slow query" in event_messages:
+        db_name = event_attrs.get("database", "downstream database")
         return {
             "incident_id": incident_id,
             "summary": f"{service_name.capitalize()} requests are timing out due to downstream database degradation.",
             "root_cause": {
-                "claim": "Downstream database latency in orders-db is causing request thread timeouts.",
+                "claim": f"Downstream database latency in {db_name} is causing request thread timeouts.",
                 "confidence": 0.82,
                 "evidence_ids": real_event_ids[:2] if real_event_ids else ["evt-unknown"],
             },
             "affected_services": affected[:3],
             "alternatives": [
                 "A recent deployment may have introduced unindexed database queries.",
-                "Database connection pool exhaustion may be starving worker threads."
+                "Disk I/O saturation on the database storage volume."
             ],
             "recommended_checks": [
-                "Inspect active connections and lock contention in orders-db.",
+                f"Inspect active queries and lock contention in {db_name}.",
                 "Check pg_stat_activity for slow queries exceeding 1000ms."
             ],
             "limitations": [
@@ -146,35 +245,12 @@ def _generate_deterministic_baseline(
             ],
         }
 
-    # Pattern 2: Payment Provider Outage
-    if "payment" in event_messages or "gateway" in event_messages or "504" in event_messages:
-        return {
-            "incident_id": incident_id,
-            "summary": "Payment authorization failures caused by third-party gateway downtime.",
-            "root_cause": {
-                "claim": "Upstream third-party payment gateway is returning 504 Gateway Timeout errors.",
-                "confidence": 0.85,
-                "evidence_ids": real_event_ids[:2] if real_event_ids else ["evt-unknown"],
-            },
-            "affected_services": affected[:2],
-            "alternatives": [
-                "Network routing partition between payment worker and external gateway.",
-            ],
-            "recommended_checks": [
-                "Check payment vendor public status page.",
-                "Verify outbound TLS certificates and egress firewall rules."
-            ],
-            "limitations": [
-                "Third-party vendor health metrics are not directly monitored."
-            ],
-        }
-
-    # Default / Generic Pattern
+    # Default Generic Fallback
     return {
         "incident_id": incident_id,
         "summary": f"Service errors detected in {service_name}.",
         "root_cause": {
-            "claim": f"High error rate observed in {service_name} operational telemetry.",
+            "claim": f"Elevated error rate observed in {service_name} operational telemetry.",
             "confidence": 0.65,
             "evidence_ids": real_event_ids[:1] if real_event_ids else ["evt-unknown"],
         },

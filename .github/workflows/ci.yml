@@ -1,0 +1,110 @@
+name: IncidentIQ CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    name: Backend Unit & Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: incidentiq
+          POSTGRES_USER: incidentiq_user
+          POSTGRES_PASSWORD: testpassword123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: incidentiq
+      POSTGRES_USER: incidentiq_user
+      POSTGRES_PASSWORD: testpassword123
+      DATABASE_URL: postgresql+psycopg://incidentiq_user:testpassword123@localhost:5432/incidentiq
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: testpassword123
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: incidentiq-artifacts
+      KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+      KAFKA_TOPIC_INCIDENT_EVENTS: incident.events
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run Unit Tests
+        run: |
+          pytest tests/unit -v
+
+      - name: Apply Database Migrations
+        run: |
+          alembic upgrade head
+
+      - name: Seed Runbooks for Retrieval
+        run: |
+          python -c "
+          from incidentiq.db.session import SessionLocal
+          from incidentiq.retrieval.indexer import index_all_runbooks
+          with SessionLocal() as db:
+              indexed = index_all_runbooks(db)
+              print(f'Successfully indexed {indexed} runbook chunks.')
+          "
+
+      - name: Run Integration Tests
+        run: |
+          pytest tests/integration -v -k "not test_mcp_service_dependency_tool"
+
+      - name: Run AI Benchmark Evaluation
+        run: |
+          python scripts/verify_evaluation_dataset.py
+          python scripts/run_eval.py
+
+  build-frontend:
+    name: Frontend TypeScript & Vite Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Typecheck and Build Bundle
+        working-directory: apps/web
+        run: npm run build

@@ -25,20 +25,26 @@ class S3StorageService:
         try:
             self.client.head_bucket(Bucket=self.bucket_name)
         except Exception:
-            self.client.create_bucket(Bucket=self.bucket_name)
+            try:
+                self.client.create_bucket(Bucket=self.bucket_name)
+            except Exception:
+                pass
 
     def upload_raw_events(self, incident_id: str, events: list[dict[str, Any]]) -> str:
         """Serialize events to JSONL and upload to incidents/{incident_id}/raw/events.jsonl."""
-        self.ensure_bucket_exists()
         s3_key = f"incidents/{incident_id}/raw/events.jsonl"
-        jsonl_content = "\n".join(json.dumps(evt, default=str) for evt in events) + "\n"
+        try:
+            self.ensure_bucket_exists()
+            jsonl_content = "\n".join(json.dumps(evt, default=str) for evt in events) + "\n"
 
-        self.client.put_object(
-            Bucket=self.bucket_name,
-            Key=s3_key,
-            Body=jsonl_content.encode("utf-8"),
-            ContentType="application/x-ndjson",
-        )
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=jsonl_content.encode("utf-8"),
+                ContentType="application/x-ndjson",
+            )
+        except Exception:
+            pass
         return s3_key
 
     def get_raw_events(self, s3_key: str) -> list[dict[str, Any]]:

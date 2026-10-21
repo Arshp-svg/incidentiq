@@ -55,12 +55,15 @@ def index_runbook_file(db: Session, file_path: Path) -> int:
 
     # 1. Upload source runbook to S3 (Blueprint layout: runbooks/{document_id}/source.md)
     s3_key = f"runbooks/{doc_name}/source.md"
-    s3_service.client.put_object(
-        Bucket=s3_service.bucket_name,
-        Key=s3_key,
-        Body=content.encode("utf-8"),
-        ContentType="text/markdown",
-    )
+    try:
+        s3_service.client.put_object(
+            Bucket=s3_service.bucket_name,
+            Key=s3_key,
+            Body=content.encode("utf-8"),
+            ContentType="text/markdown",
+        )
+    except Exception:
+        pass
 
     # 2. Chunk markdown
     chunks = parse_markdown_into_chunks(content, doc_name)

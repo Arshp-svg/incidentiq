@@ -1,6 +1,5 @@
-"""Unit tests for FastAPI endpoints, status codes, idempotency, and error handling."""
-
 import uuid
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from services.api.main import app
 
@@ -34,7 +33,8 @@ def test_incident_creation_validation_error():
     assert res.status_code == 422
 
 
-def test_idempotency_key_replay_and_conflict():
+@patch("incidentiq.db.repositories.s3_service.upload_raw_events", return_value="incidents/test/raw/events.jsonl")
+def test_idempotency_key_replay_and_conflict(mock_s3_upload):
     """Verify Idempotency-Key caching returns identical incident on exact replay and 409 on conflict."""
     key = f"idem-unit-{uuid.uuid4()}"
     payload_a = {

@@ -59,13 +59,13 @@ jobs:
           pip install -e .
           pip install pytest pytest-asyncio httpx
 
-      - name: Run Unit Tests
-        run: |
-          pytest tests/unit -v
-
       - name: Apply Database Migrations
         run: |
           alembic upgrade head
+
+      - name: Run Unit Tests
+        run: |
+          pytest tests/unit -v
 
       - name: Seed Runbooks for Retrieval
         run: |

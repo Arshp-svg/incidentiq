@@ -22,6 +22,24 @@ class IncidentDetailResponse(BaseModel):
     created_at: datetime
 
 
+class IncidentListResponse(BaseModel):
+    items: list[IncidentDetailResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class IncidentEventResponse(BaseModel):
+    id: UUID
+    incident_id: UUID
+    source_event_id: str
+    service_name: str
+    event_type: str
+    occurred_at: datetime
+    payload: dict[str, Any]
+    s3_key: str | None = None
+
+
 class JobStatusResponse(BaseModel):
     job_id: UUID
     incident_id: UUID
@@ -46,3 +64,40 @@ class ReportResponse(BaseModel):
     alternatives: list[str] = Field(default_factory=list)
     recommended_checks: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+
+
+class DemoRunResponse(BaseModel):
+    incident_id: UUID
+    job_id: UUID
+    status: str = "queued"
+    status_url: str
+
+
+class EventItem(BaseModel):
+    event_id: str
+    timestamp: datetime
+    service: str
+    event_type: str
+    severity: Literal["low", "medium", "high", "critical"]
+    message: str
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class IncidentCreateRequest(BaseModel):
+    title: str
+    service_name: str
+    severity: Literal["low", "medium", "high", "critical"]
+    events: list[EventItem] = Field(default_factory=list)
+
+
+class FeedbackCreateRequest(BaseModel):
+    rating: Literal["helpful", "incorrect", "incomplete"]
+    comment: str | None = None
+
+
+class FeedbackResponse(BaseModel):
+    id: UUID
+    incident_id: UUID
+    rating: str
+    comment: str | None = None
+    created_at: datetime

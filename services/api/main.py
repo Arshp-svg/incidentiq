@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.api.routes.health import router as health_router
 from services.api.routes.incidents import router as incidents_router
 from services.api.routes.jobs import router as jobs_router
+from services.api.routes.demo import router as demo_router
 
 app = FastAPI(
     title="IncidentIQ API",
@@ -25,6 +26,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(incidents_router)
 app.include_router(jobs_router)
+app.include_router(demo_router)
 
 
 @app.get("/")

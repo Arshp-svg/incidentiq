@@ -1,10 +1,20 @@
 """Data access repositories keeping database queries separate from API routes."""
 
 import json
+import uuid
 from uuid import UUID
+from datetime import datetime, timezone
 from typing import Any
 from sqlalchemy.orm import Session
-from incidentiq.db.models import Incident, InvestigationJob, InvestigationFinding, IncidentEvent
+from sqlalchemy import func
+from incidentiq.db.models import (
+    Incident,
+    InvestigationJob,
+    InvestigationFinding,
+    IncidentEvent,
+    Feedback,
+    OutboxEvent,
+)
 from incidentiq.storage.s3 import s3_service
 
 
@@ -13,6 +23,29 @@ class IncidentRepository:
     def get_incident(db: Session, incident_id: UUID) -> Incident | None:
         """Fetch incident record by ID."""
         return db.query(Incident).filter(Incident.id == incident_id).first()
+
+    @staticmethod
+    def list_incidents(db: Session, limit: int = 20, offset: int = 0) -> tuple[list[Incident], int]:
+        """Fetch paginated incidents and total count."""
+        total = db.query(func.count(Incident.id)).scalar() or 0
+        items = (
+            db.query(Incident)
+            .order_by(Incident.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return items, total
+
+    @staticmethod
+    def get_incident_events(db: Session, incident_id: UUID) -> list[IncidentEvent]:
+        """Fetch chronological events related to an incident."""
+        return (
+            db.query(IncidentEvent)
+            .filter(IncidentEvent.incident_id == incident_id)
+            .order_by(IncidentEvent.occurred_at.asc())
+            .all()
+        )
 
     @staticmethod
     def get_job(db: Session, job_id: UUID) -> InvestigationJob | None:
@@ -78,6 +111,99 @@ class IncidentRepository:
             "recommended_checks": [],
             "limitations": [],
         }
+
+    @staticmethod
+    def create_feedback(
+        db: Session,
+        incident_id: UUID,
+        rating: str,
+        comment: str | None = None,
+    ) -> Feedback:
+        """Record user feedback with rating constraint check."""
+        feedback = Feedback(
+            id=uuid.uuid4(),
+            incident_id=incident_id,
+            rating=rating,
+            comment=comment,
+        )
+        db.add(feedback)
+        db.commit()
+        db.refresh(feedback)
+        return feedback
+
+    @staticmethod
+    def create_incident_with_events(
+        db: Session,
+        title: str,
+        service_name: str,
+        severity: str,
+        events_data: list[dict[str, Any]],
+        idempotency_key: str | None = None,
+    ) -> tuple[Incident, InvestigationJob]:
+        """Atomically create Incident, Job, Events, and Outbox event."""
+        incident_id = uuid.uuid4()
+        job_id = uuid.uuid4()
+
+        # 1. Upload raw events to S3
+        s3_key = s3_service.upload_raw_events(str(incident_id), events_data)
+
+        # 2. Create Incident
+        inc = Incident(
+            id=incident_id,
+            title=title,
+            service_name=service_name,
+            severity=severity,
+            status="investigating",
+            started_at=datetime.now(timezone.utc),
+        )
+        db.add(inc)
+
+        # 3. Create Investigation Job
+        job = InvestigationJob(
+            id=job_id,
+            incident_id=incident_id,
+            status="queued",
+        )
+        db.add(job)
+
+        # 4. Create Incident Events
+        for evt in events_data:
+            dt_str = evt.get("timestamp") or evt.get("occurred_at")
+            if dt_str:
+                dt = datetime.fromisoformat(str(dt_str).replace("Z", "+00:00"))
+            else:
+                dt = datetime.now(timezone.utc)
+
+            event_record = IncidentEvent(
+                id=uuid.uuid4(),
+                incident_id=incident_id,
+                source_event_id=evt.get("event_id") or f"evt-{uuid.uuid4().hex[:6]}",
+                service_name=evt.get("service") or service_name,
+                event_type=evt.get("event_type", "error"),
+                occurred_at=dt,
+                payload={**evt.get("attributes", {}), "message": evt.get("message", "")},
+                s3_key=s3_key,
+            )
+            db.add(event_record)
+
+        # 5. Outbox Event for reliable Kafka notification
+        outbox = OutboxEvent(
+            id=uuid.uuid4(),
+            aggregate_id=incident_id,
+            event_type="incident.created",
+            payload={
+                "incident_id": str(incident_id),
+                "job_id": str(job_id),
+                "idempotency_key": idempotency_key,
+                "s3_key": s3_key,
+            },
+        )
+        db.add(outbox)
+
+        db.commit()
+        db.refresh(inc)
+        db.refresh(job)
+        return inc, job
 
 
 incident_repository = IncidentRepository()

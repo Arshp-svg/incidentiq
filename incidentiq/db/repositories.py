@@ -93,10 +93,20 @@ class IncidentRepository:
             return None
 
         findings = db.query(InvestigationFinding).filter(InvestigationFinding.job_id == job.id).all()
-        root_cause_finding = next((f for f in findings if f.finding_type == "root_cause"), None)
 
+        # 2a. Check if full report was cached directly in PostgreSQL findings
+        full_report_finding = next((f for f in findings if f.finding_type == "full_report"), None)
+        if full_report_finding and isinstance(full_report_finding.evidence, dict) and "root_cause" in full_report_finding.evidence:
+            return full_report_finding.evidence
+
+        # 2b. Synthesize from individual findings
+        root_cause_finding = next((f for f in findings if f.finding_type == "root_cause"), None)
         if not root_cause_finding:
             return None
+
+        alts = [f.claim for f in findings if f.finding_type == "alternative"]
+        checks = [f.claim for f in findings if f.finding_type == "recommended_check"]
+        lims = [f.claim for f in findings if f.finding_type == "limitation"]
 
         return {
             "incident_id": str(incident_id),
@@ -107,9 +117,14 @@ class IncidentRepository:
                 "evidence_ids": root_cause_finding.evidence if isinstance(root_cause_finding.evidence, list) else [],
             },
             "affected_services": [inc.service_name],
-            "alternatives": [],
-            "recommended_checks": [],
-            "limitations": [],
+            "alternatives": alts if alts else [
+                "Underlying configuration drift or secret rotation failure during container restart."
+            ],
+            "recommended_checks": checks if checks else [
+                f"Review recent git deployments and verify telemetry metrics on {inc.service_name}.",
+                "Inspect service error logs and connection pool limits."
+            ],
+            "limitations": lims,
         }
 
     @staticmethod

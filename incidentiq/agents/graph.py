@@ -148,6 +148,7 @@ def persist_result(state: InvestigationState) -> dict[str, Any]:
             job = db.query(InvestigationJob).filter(InvestigationJob.id == job_id).first()
             if job:
                 root_cause = report.get("root_cause", {})
+                # Upsert root_cause finding
                 existing_finding = db.query(InvestigationFinding).filter(
                     InvestigationFinding.job_id == job_id,
                     InvestigationFinding.finding_type == "root_cause",
@@ -165,6 +166,26 @@ def persist_result(state: InvestigationState) -> dict[str, Any]:
                         evidence=root_cause.get("evidence_ids", []),
                     )
                     db.add(finding)
+
+                # Upsert full report finding to guarantee availability even without S3
+                existing_full = db.query(InvestigationFinding).filter(
+                    InvestigationFinding.job_id == job_id,
+                    InvestigationFinding.finding_type == "full_report",
+                ).first()
+                if existing_full:
+                    existing_full.claim = report.get("summary", "Complete Investigation Report")
+                    existing_full.confidence = 1.0
+                    existing_full.evidence = report
+                else:
+                    full_finding = InvestigationFinding(
+                        job_id=job_id,
+                        finding_type="full_report",
+                        claim=report.get("summary", "Complete Investigation Report"),
+                        confidence=1.0,
+                        evidence=report,
+                    )
+                    db.add(full_finding)
+
                 job.status = "completed"
                 db.commit()
             else:

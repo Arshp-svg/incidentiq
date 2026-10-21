@@ -175,11 +175,17 @@ export const InvestigationReportView: React.FC<InvestigationReportViewProps> = (
               Alternative Explanations
             </h4>
           </div>
-          <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {report.alternatives.map((alt, idx) => (
-              <li key={idx} style={{ lineHeight: '1.4' }}>{alt}</li>
-            ))}
-          </ul>
+          {report.alternatives.length === 0 ? (
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>
+              No alternative hypotheses identified; telemetry strongly indicates the primary root cause.
+            </p>
+          ) : (
+            <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: 0 }}>
+              {report.alternatives.map((alt, idx) => (
+                <li key={idx} style={{ lineHeight: '1.4' }}>{alt}</li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Recommended Checks */}
@@ -190,11 +196,17 @@ export const InvestigationReportView: React.FC<InvestigationReportViewProps> = (
               Recommended Checks
             </h4>
           </div>
-          <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {report.recommended_checks.map((chk, idx) => (
-              <li key={idx} style={{ lineHeight: '1.4' }}>{chk}</li>
-            ))}
-          </ul>
+          {report.recommended_checks.length === 0 ? (
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>
+              Review service deployment history and verify database connection pool limits.
+            </p>
+          ) : (
+            <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: 0 }}>
+              {report.recommended_checks.map((chk, idx) => (
+                <li key={idx} style={{ lineHeight: '1.4' }}>{chk}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

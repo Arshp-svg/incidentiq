@@ -41,15 +41,15 @@ def health_ready(response: Response) -> HealthResponse:
         details["neo4j"] = f"unhealthy: {e}"
         is_ready = False
 
-    # 3. Check MinIO / S3
+    # 3. Check MinIO / S3 (optional object store backup)
     try:
         s3_service.client.head_bucket(Bucket=s3_service.bucket_name)
         details["s3"] = "healthy"
-    except Exception as e:
-        details["s3"] = f"unhealthy: {e}"
-        is_ready = False
+    except Exception:
+        details["s3"] = "unconfigured_or_offline"
 
-    if not is_ready:
+    # Core required dependencies for investigation are PostgreSQL and Neo4j
+    if "unhealthy" in details.get("postgres", "") or "unhealthy" in details.get("neo4j", ""):
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthResponse(status="degraded", details=details)
 

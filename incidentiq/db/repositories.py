@@ -92,12 +92,16 @@ class IncidentRepository:
         if not job:
             return None
 
-        findings = db.query(InvestigationFinding).filter(InvestigationFinding.job_id == job.id).all()
+        # 2a. Check if full report was cached in job.checkpoint_id
+        if job.checkpoint_id:
+            try:
+                cached_report = json.loads(job.checkpoint_id)
+                if isinstance(cached_report, dict) and "root_cause" in cached_report:
+                    return cached_report
+            except Exception:
+                pass
 
-        # 2a. Check if full report was cached directly in PostgreSQL findings
-        full_report_finding = next((f for f in findings if f.finding_type == "full_report"), None)
-        if full_report_finding and isinstance(full_report_finding.evidence, dict) and "root_cause" in full_report_finding.evidence:
-            return full_report_finding.evidence
+        findings = db.query(InvestigationFinding).filter(InvestigationFinding.job_id == job.id).all()
 
         # 2b. Synthesize from individual findings
         root_cause_finding = next((f for f in findings if f.finding_type == "root_cause"), None)

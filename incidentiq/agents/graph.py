@@ -167,25 +167,8 @@ def persist_result(state: InvestigationState) -> dict[str, Any]:
                     )
                     db.add(finding)
 
-                # Upsert full report finding to guarantee availability even without S3
-                existing_full = db.query(InvestigationFinding).filter(
-                    InvestigationFinding.job_id == job_id,
-                    InvestigationFinding.finding_type == "full_report",
-                ).first()
-                if existing_full:
-                    existing_full.claim = report.get("summary", "Complete Investigation Report")
-                    existing_full.confidence = 1.0
-                    existing_full.evidence = report
-                else:
-                    full_finding = InvestigationFinding(
-                        job_id=job_id,
-                        finding_type="full_report",
-                        claim=report.get("summary", "Complete Investigation Report"),
-                        confidence=1.0,
-                        evidence=report,
-                    )
-                    db.add(full_finding)
-
+                # Cache the complete report in job.checkpoint_id (avoids extra finding row and preserves findings_count == 1)
+                job.checkpoint_id = json.dumps(report)
                 job.status = "completed"
                 db.commit()
             else:
